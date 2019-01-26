@@ -1326,6 +1326,19 @@ addr_t find_strlen(void) {
     return offset_to_target + kerndumpbase;
 }
 
+
+/*
+ *
+ * 
+ *
+ */
+
+/*
+ *
+ * @Cryptiiiic's patches
+ *
+ */ 
+
 addr_t find_boottime(void) {
     addr_t ref = find_strref("%s WARNING: PMU offset is less then sys PMU", 1, string_base_oslstring);
     ref -= kerndumpbase;
@@ -1359,13 +1372,11 @@ addr_t find_boottime(void) {
     return val;
 }
 
-
 /*
  *
  * 
  *
  */
-
 
 
 #ifdef HAVE_MAIN
