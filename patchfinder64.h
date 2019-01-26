@@ -43,5 +43,6 @@ uint64_t find_vnode_recycle(void);
 uint64_t find_lck_mtx_lock(void);
 uint64_t find_lck_mtx_unlock(void);
 uint64_t find_strlen(void);
+uint64_t find_boottime(void);
 
 #endif

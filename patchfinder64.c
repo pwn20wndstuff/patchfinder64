@@ -1326,6 +1326,39 @@ addr_t find_strlen(void) {
     return offset_to_target + kerndumpbase;
 }
 
+addr_t find_boottime(void) {
+    addr_t ref = find_strref("%s WARNING: PMU offset is less then sys PMU", 1, string_base_oslstring);
+    ref -= kerndumpbase;
+
+    // ADRP Xm, #_boottime@PAGE
+    ref = step64(kernel, ref, 0x4D, INSN_ADRP);
+
+    // pc base
+    uint64_t val = kerndumpbase;
+
+    uint32_t* insn = (uint32_t*)(kernel + ref);
+    // add pc (well, offset)
+    val += ((uint8_t*)(insn)-kernel) & ~0xfff;
+    uint8_t xm = *insn & 0x1f;
+
+    // add imm: immhi(bits 23-5)|immlo(bits 30-29)
+    val += (*insn << 9 & 0x1ffffc000) | (*insn >> 17 & 0x3000);
+
+    ++insn;
+    // STR Xn, [Xm,_boottime@PAGEOFF]
+    if ((*insn & 0xF9090000) != 0xF9000000) {
+        return 0;
+    }
+    if (((*insn >> 5) & 0x1f) != xm) {
+        return 0;
+    }
+    // add pageoff
+    val += ((*insn >> 10) & 0xFFF) << 3;
+    uint8_t xn = (*insn & 0x1f);
+
+    return val;
+}
+
 
 /*
  *
