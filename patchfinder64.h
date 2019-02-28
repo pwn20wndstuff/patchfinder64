@@ -1,6 +1,8 @@
 #ifndef PATCHFINDER64_H_
 #define PATCHFINDER64_H_
 
+#include <stdbool.h>
+
 extern bool auth_ptrs;
 extern bool monolithic_kernel;
 
