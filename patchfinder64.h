@@ -121,6 +121,9 @@ uint64_t find_extension_release(void);
 uint64_t find_sfree(void);
 uint64_t find_sb_ustate_create(void);
 uint64_t find_sstrdup(void);
+uint64_t find_handler_map(void);
+uint64_t find_sandbox_handler(const char *name);
+uint64_t find_issue_extension_for_mach_service(void);
 
 uint64_t find_symbol(const char *symbol);
 

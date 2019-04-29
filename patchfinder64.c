@@ -2211,6 +2211,34 @@ addr_t find_kmod_start(void)
     return func + kerndumpbase;
 }
 
+addr_t find_handler_map(void)
+{
+    static addr_t addr = 0;
+    if (addr) return addr + kerndumpbase;
+
+    addr_t kmod_start = find_kmod_start();
+    if (!kmod_start) return 0;
+    kmod_start -= kerndumpbase;
+    addr_t func = kmod_start;
+
+    addr_t call = step64(kernel, kmod_start, 0x20, INSN_CALL);
+    if (call) {
+        func = follow_call64(kernel, call);
+        if (!func) return 0;
+    }
+
+    // ADD Xn, Xy, #0x10
+    addr_t add = step64(kernel, func, 0x50, 0x91004000, 0xFFFFFC00);
+    if (!add) return 0;
+
+    uint32_t insn = *(uint32_t*)(kernel + add);
+    int rn = (insn>>5)&0x1f;
+
+    addr = calc64(kernel, add-0x10, add, rn);
+    if (!addr) return 0;
+    return addr + kerndumpbase;
+}
+
 addr_t find_policy_conf(void)
 {
     addr_t kmod_start = find_kmod_start();
@@ -2229,6 +2257,35 @@ addr_t find_policy_conf(void)
     addr_t addr = calc64(kernel, ref, ref+8, 0);
     if (!addr) return 0;
     return addr + kerndumpbase;
+}
+
+addr_t find_sandbox_handler(const char *name)
+{
+    addr_t handler_map = find_handler_map();
+    if (!handler_map) return 0;
+    handler_map -= kerndumpbase;
+
+    struct {
+        const char *name;
+        uint64_t func;
+        uint64_t unk;
+    } *handler = kernel + handler_map;
+
+    addr_t func = 0;
+    while (handler->name && handler->func) {
+        const char *hname = (char*)remove_pac(handler->name) - (char*)kerndumpbase + (char*)kernel;
+        if (strcmp(hname, name) == 0) {
+            func = remove_pac(handler->func);
+            break;
+        }
+        handler++;
+    }
+    return func;
+}
+
+addr_t find_issue_extension_for_mach_service(void)
+{
+    return find_sandbox_handler("com.apple.security.exception.mach-lookup.global-name");
 }
 
 addr_t find_policy_ops(void)
@@ -3247,6 +3304,8 @@ main(int argc, char **argv)
 } while(false)
     
     CHECK(kmod_start);
+    CHECK(handler_map);
+    CHECK(issue_extension_for_mach_service);
     CHECK(policy_conf);
     CHECK(policy_ops);
     CHECK(syscall_set_profile);
