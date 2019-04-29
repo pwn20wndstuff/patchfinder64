@@ -2288,6 +2288,11 @@ addr_t find_issue_extension_for_mach_service(void)
     return find_sandbox_handler("com.apple.security.exception.mach-lookup.global-name");
 }
 
+addr_t find_issue_extension_for_absolute_path(void)
+{
+    return find_sandbox_handler("com.apple.security.exception.files.absolute-path.read-only");
+}
+
 addr_t find_policy_ops(void)
 {
     static struct mac_policy_conf *conf = NULL;
@@ -3306,6 +3311,7 @@ main(int argc, char **argv)
     CHECK(kmod_start);
     CHECK(handler_map);
     CHECK(issue_extension_for_mach_service);
+    CHECK(issue_extension_for_absolute_path);
     CHECK(policy_conf);
     CHECK(policy_ops);
     CHECK(syscall_set_profile);
