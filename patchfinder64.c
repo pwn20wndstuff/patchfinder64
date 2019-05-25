@@ -54,7 +54,7 @@ bool monolithic_kernel = false;
 #define INSN_RET  0xD65F03C0, 0xFFFFFFFF
 #define INSN_CALL 0x94000000, 0xFC000000
 #define INSN_B    0x14000000, 0xFC000000
-#define INSN_CBZ  0x34000000, 0xFC000000
+#define INSN_CBZ  0x34000000, 0x7F000000
 #define INSN_ADRP 0x90000000, 0x9F000000
 
 static unsigned char *
@@ -2052,16 +2052,17 @@ addr_t find_osunserializexml(void)
 
 addr_t find_smalloc(void)
 {
+    static uint64_t start=0;
+    if (start) return start + kerndumpbase;
+
     addr_t ref = find_strref("sandbox memory allocation failure", 1, string_base_pstring, false, false);
     if (!ref) ref = find_strref("sandbox memory allocation failure", 1, string_base_oslstring, false, false);
     
-    if (!ref) {
-        return 0;
-    }
+    if (!ref) return 0;
     
     ref -= kerndumpbase;
     
-    uint64_t start = bof64(kernel, prelink_base, ref);
+    start = bof64(kernel, prelink_base, ref);
     
     if (!start) {
         return 0;
@@ -2320,6 +2321,33 @@ addr_t find_vn_getpath(void)
     return follow_stub(kernel, call);
 }
 
+addr_t find_IOMalloc(void)
+{
+    addr_t start = find_smalloc();
+    if (!start) return 0;
+    start -= kerndumpbase;
+
+    addr_t call = step64(kernel, start + 4, 0x50, INSN_CALL);
+    if (!call) return 0;
+
+    return follow_stub(kernel, call);
+}
+
+addr_t find_IOFree(void)
+{
+    addr_t start = find_sfree();
+    if (!start) return 0;
+    start -= kerndumpbase;
+
+    addr_t call=start;
+    for (int i=0; i<2; i++) {
+        call = step64(kernel, call + 4, 0x100, INSN_CALL);
+        if (!call) return 0;
+    }
+
+    return follow_stub(kernel, call);
+}
+
 addr_t find_policy_ops(void)
 {
     static struct mac_policy_conf *conf = NULL;
@@ -2471,14 +2499,17 @@ addr_t find_extension_release(void)
 
 addr_t find_sfree(void)
 {
+    static addr_t func=0;
+    if (func) return func + kerndumpbase;
+
     addr_t extension_release = find_extension_release();
     if (!extension_release) return 0;
     extension_release -= kerndumpbase;
 
-    addr_t call = step64(kernel, extension_release, 0x100, INSN_CALL);
+    addr_t call = step64(kernel, extension_release+4, 0x100, INSN_CALL);
     if (!call) return 0;
 
-    addr_t func = follow_call64(kernel, call);
+    func = follow_call64(kernel, call);
     if (!func) return 0;
     return func + kerndumpbase;
 }
@@ -3335,6 +3366,8 @@ main(int argc, char **argv)
     } \
 } while(false)
     
+    CHECK(IOMalloc);
+    CHECK(IOFree);
     CHECK(copy_path_for_vp);
     CHECK(vn_getpath);
     CHECK(kmod_start);
@@ -3385,7 +3418,6 @@ main(int argc, char **argv)
     CHECK(mount_common);
     CHECK(fs_snapshot);
     CHECK(vnode_get_snapshot);
-    CHECK(boottime);
     if (auth_ptrs) {
         CHECK(paciza_pointer__l2tp_domain_module_start);
         CHECK(paciza_pointer__l2tp_domain_module_stop);

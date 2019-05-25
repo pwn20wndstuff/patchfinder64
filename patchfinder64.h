@@ -127,6 +127,8 @@ uint64_t find_issue_extension_for_mach_service(void);
 uint64_t find_issue_extension_for_absolute_path(void);
 uint64_t find_copy_path_for_vp(void);
 uint64_t find_vn_getpath(void);
+uint64_t find_IOMalloc(void);
+uint64_t find_IOFree(void);
 
 uint64_t find_symbol(const char *symbol);
 
