@@ -2293,6 +2293,33 @@ addr_t find_issue_extension_for_absolute_path(void)
     return find_sandbox_handler("com.apple.security.exception.files.absolute-path.read-only");
 }
 
+addr_t find_copy_path_for_vp(void)
+{
+    addr_t ref = find_strref("unknown path", 1, string_base_pstring, true, false);
+    if (!ref) return 0;
+    ref -= kerndumpbase;
+
+    addr_t func = bof64(kernel, prelink_base, ref);
+    if (!func) return 0;
+
+    return func + kerndumpbase;
+}
+
+addr_t find_vn_getpath(void)
+{
+    addr_t copy_path_for_vp = find_copy_path_for_vp();
+    if (!copy_path_for_vp) return 0;
+    copy_path_for_vp -= kerndumpbase;
+
+    addr_t call = copy_path_for_vp;
+    for (int i=0; i<2; i++) {
+        call = step64(kernel, call + 4, 0x100, INSN_CALL);
+        if (!call) return 0;
+    }
+
+    return follow_stub(kernel, call);
+}
+
 addr_t find_policy_ops(void)
 {
     static struct mac_policy_conf *conf = NULL;
@@ -3308,6 +3335,8 @@ main(int argc, char **argv)
     } \
 } while(false)
     
+    CHECK(copy_path_for_vp);
+    CHECK(vn_getpath);
     CHECK(kmod_start);
     CHECK(handler_map);
     CHECK(issue_extension_for_mach_service);
