@@ -113,6 +113,7 @@ uint64_t find_proc_rele(void);
 uint64_t find_mpo_entry(uint64_t offset);
 uint64_t find_hook_policy_syscall(int n);
 uint64_t find_syscall_set_profile(void);
+uint64_t find_syscall_check_sandbox(void);
 uint64_t find_sandbox_set_container_copyin(void);
 uint64_t find_platform_set_container(void);
 uint64_t find_extension_create_file(void);

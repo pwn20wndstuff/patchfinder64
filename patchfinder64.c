@@ -1443,57 +1443,16 @@ addr_t find_vnode_put(void) {
 }
 
 addr_t find_vnode_getfromfd(void) {
-    addr_t call1, call2, call3, call4, call5, call6, call7;
-    addr_t func1;
+    addr_t syscall_check_sandbox = find_syscall_check_sandbox();
+    if (!syscall_check_sandbox) return 0;
+    syscall_check_sandbox -= kerndumpbase;
 
-    addr_t ent_str = find_strref("rootless_storage_class_entitlement", 1, string_base_pstring, false, false);
-    
-    if (!ent_str) {
-        return 0;
-    }
-    
-    ent_str -= kerndumpbase;
+    addr_t ldr = step64(kernel, syscall_check_sandbox+4, 0x1000, 0xB94003E1, 0xFFE003FF);
+    if (!ldr) return 0;
 
-    addr_t call_to_unk1 = step64(kernel, ent_str, 20*4, INSN_CALL);
-    
-    if (!call_to_unk1) {
-        return 0;
-    }
-    
-    addr_t call_to_strlcpy = step64(kernel, call_to_unk1 + 4, 20*4, INSN_CALL);
-    
-    if (!call_to_strlcpy) {
-        return 0;
-    }
-    
-    addr_t call_to_strlcat = step64(kernel, call_to_strlcpy + 4, 20*4, INSN_CALL);
-    
-    if (!call_to_strlcat) {
-        return 0;
-    }
-    
-    addr_t call_to_unk2 = step64(kernel, call_to_strlcat + 4, 20*4, INSN_CALL);
-    
-    if (!call_to_unk2) {
-        return 0;
-    }
-    
-    addr_t call_to_unk3 = step64(kernel, call_to_unk2 + 4, 20*4, INSN_CALL);
-    
-    if (!call_to_unk3) {
-        return 0;
-    }
-    
-    addr_t call_to_vfs_context_create = step64(kernel, call_to_unk3 + 4, 20*4, INSN_CALL);
-    
-    if (!call_to_vfs_context_create) {
-        return 0;
-    }
-    
-    addr_t call_to_stub = step64(kernel, call_to_vfs_context_create + 4, 20*4, INSN_CALL);
-    if (!call_to_stub) return 0;
-
-    return follow_stub(kernel, call_to_stub);
+    addr_t call = step64(kernel, ldr+4, 0x10, INSN_CALL);
+    if (!call) return 0;
+    return follow_stub(kernel, call);
 }
 
 addr_t find_vnode_getattr(void) {
@@ -2406,6 +2365,11 @@ addr_t find_hook_policy_syscall(int n)
 addr_t find_syscall_set_profile(void)
 {
     return find_hook_policy_syscall(0);
+}
+
+addr_t find_syscall_check_sandbox(void)
+{
+    return find_hook_policy_syscall(2);
 }
 
 addr_t find_sandbox_set_container_copyin(void)
@@ -3366,6 +3330,7 @@ main(int argc, char **argv)
     } \
 } while(false)
     
+    CHECK(syscall_check_sandbox);
     CHECK(IOMalloc);
     CHECK(IOFree);
     CHECK(copy_path_for_vp);
