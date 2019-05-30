@@ -352,6 +352,12 @@ xref64(const uint8_t *buf, addr_t start, addr_t end, addr_t what)
             value[rd] = value[rm];*/
         } else if ((op & 0xFF000000) == 0x91000000) {
             unsigned rn = (op >> 5) & 0x1F;
+            if (rn == 0x1f) {
+                // ignore ADD Xn, SP
+                value[reg] = 0;
+                continue;
+            }
+
             unsigned shift = (op >> 22) & 3;
             unsigned imm = (op >> 10) & 0xFFF;
             if (shift == 1) {
@@ -1420,26 +1426,17 @@ addr_t find_vnode_lookup(void) {
 }
 
 addr_t find_vnode_put(void) {
-    addr_t err_str = find_strref("getparent(%p) != parent_vp(%p)", 1, string_base_oslstring, false, false);
-    if (!err_str)
-        err_str = find_strref("KBY: getparent(%p) != parent_vp(%p)", 1, string_base_pstring, false, false);
-    if (!err_str)
-        err_str = find_strref("getparent(%p) != parent_vp(%p)", 1, string_base_pstring, false, false);
-    
-    if (!err_str) return 0;
+    addr_t hook_mount_check_snapshot_revert = find_hook_mount_check_snapshot_revert();
+    if (!hook_mount_check_snapshot_revert) return 0;
+    hook_mount_check_snapshot_revert -= kerndumpbase;
 
-    err_str -= kerndumpbase;
+    addr_t call = hook_mount_check_snapshot_revert;
+    for (int i=0; i<4; i++) {
+        call = step64(kernel, call+4, 0x50, INSN_CALL);
+        if (!call) return 0;
+    }
 
-    addr_t call_to_os_log = step64(kernel, err_str, 20*4, INSN_CALL);
-    if (!call_to_os_log) return 0;
-    
-    addr_t call_to_vn_getpath = step64(kernel, call_to_os_log + 4, 20*4, INSN_CALL);
-    if (!call_to_vn_getpath) return 0;
-    
-    addr_t call_to_stub = step64(kernel, call_to_vn_getpath + 4, 20*4, INSN_CALL);
-    if (!call_to_stub) return 0;
-
-    return follow_stub(kernel, call_to_stub);
+    return follow_stub(kernel, call);
 }
 
 addr_t find_vnode_getfromfd(void) {
@@ -2332,6 +2329,10 @@ addr_t find_mpo_entry(addr_t offset)
     return remove_pac(opref);
 }
 
+addr_t find_hook_mount_check_snapshot_revert()
+{
+    return find_mpo(mount_check_snapshot_revert);
+}
 
 addr_t find_hook_policy_syscall(int n)
 {
