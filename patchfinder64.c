@@ -39,7 +39,7 @@ static addr_t kernel_entry = 0;
 static void *kernel_mh = 0;
 static addr_t kernel_delta = 0;
 bool monolithic_kernel = false;
-
+uint32_t cmdline_offset = 0;
 
 #define IS64(image) (*(uint8_t *)(image) & 1)
 
@@ -2087,6 +2087,76 @@ addr_t find_shenanigans(void)
     return val;
 }
 
+uint64_t find_boot_args(void) {
+    /*
+     ADRP            X8, #_PE_state@PAGE
+     ADD             X8, X8, #_PE_state@PAGEOFF
+     LDR             X8, [X8,#(PE_state__boot_args - 0xFFFFFFF0078BF098)]
+     ADD             X8, X8, #0x6C
+     STR             X8, [SP,#0x550+var_550]
+     ADRP            X0, #aBsdInitCannotF@PAGE ; "\"bsd_init: cannot find root vnode: %s"...
+     ADD             X0, X0, #aBsdInitCannotF@PAGEOFF ; "\"bsd_init: cannot find root vnode: %s"...
+     BL              _panic
+     */
+    
+    addr_t ref = find_strref("\"bsd_init: cannot find root vnode: %s\"", text_prelink_base, string_base_cstring, false, false);
+    
+    if (ref == 0) {
+        return 0;
+    }
+    
+    ref -= kerndumpbase;
+    // skip add & adrp for panic str
+    ref -= 8;
+    uint32_t *insn = (uint32_t*)(kernel+ref);
+    
+    // skip str
+    --insn;
+    // add xX, xX, #cmdline_offset
+    uint8_t xm = *insn&0x1f;
+    if (((*insn>>5)&0x1f) != xm || ((*insn>>22)&3) != 0) {
+        return 0;
+    }
+    
+    cmdline_offset = (*insn>>10) & 0xfff;
+    
+    uint64_t val = kerndumpbase;
+    
+    --insn;
+    // ldr xX, [xX, #(PE_state__boot_args - PE_state)]
+    if ((*insn & 0xF9C00000) != 0xF9400000) {
+        return 0;
+    }
+    // xd == xX, xn == xX,
+    if ((*insn&0x1f) != xm || ((*insn>>5)&0x1f) != xm) {
+        return 0;
+    }
+    
+    val += ((*insn >> 10) & 0xFFF) << 3;
+    
+    --insn;
+    // add xX, xX, #_PE_state@PAGEOFF
+    if ((*insn&0x1f) != xm || ((*insn>>5)&0x1f) != xm || ((*insn>>22)&3) != 0) {
+        return 0;
+    }
+    
+    val += (*insn>>10) & 0xfff;
+    
+    --insn;
+    if ((*insn & 0x1f) != xm) {
+        return 0;
+    }
+    
+    // pc
+    val += ((uint8_t*)(insn) - kernel) & ~0xfff;
+    
+    // don't ask, I wrote this at 5am
+    val += (*insn<<9 & 0x1ffffc000) | (*insn>>17 & 0x3000);
+    
+    return val;
+}
+
+
 /*
  *
  *
@@ -2226,11 +2296,11 @@ addr_t find_sandbox_handler(const char *name)
         const char *name;
         uint64_t func;
         uint64_t unk;
-    } *handler = kernel + handler_map;
+    } *handler = (void *)(kernel + handler_map);
 
     addr_t func = 0;
     while (handler->name && handler->func) {
-        const char *hname = (char*)remove_pac(handler->name) - (char*)kerndumpbase + (char*)kernel;
+        const char *hname = (char*)remove_pac((addr_t)handler->name) - (char*)kerndumpbase + (char*)kernel;
         if (strcmp(hname, name) == 0) {
             func = remove_pac(handler->func);
             break;
@@ -2341,7 +2411,7 @@ addr_t find_hook_policy_syscall(int n)
     policy_syscall -= kerndumpbase;
 
     //uint32_t insn = *(uint32_t *)(kernel + policy_syscall);
-    uint32_t insn = step64(kernel, policy_syscall, 0x100, 0x7100003F, 0xFFC003FF);
+    uint32_t insn = (uint32_t)step64(kernel, policy_syscall, 0x100, 0x7100003F, 0xFFC003FF);
     if (!insn) return 0;
     int len = (*(int*)(kernel+insn)>>10) & 0xFFF;
     if (n > len) return 0;
@@ -3331,6 +3401,7 @@ main(int argc, char **argv)
     } \
 } while(false)
     
+    CHECK(boot_args);
     CHECK(syscall_check_sandbox);
     CHECK(IOMalloc);
     CHECK(IOFree);

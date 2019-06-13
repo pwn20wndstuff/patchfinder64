@@ -7,6 +7,7 @@
 
 extern bool auth_ptrs;
 extern bool monolithic_kernel;
+extern uint32_t cmdline_offset;
 
 int init_kernel(size_t (*kread)(uint64_t, void *, size_t), uint64_t kernel_base, const char *filename);
 void term_kernel(void);
@@ -69,6 +70,7 @@ uint64_t find_OSBoolean_True(void);
 uint64_t find_osunserializexml(void);
 uint64_t find_smalloc(void);
 uint64_t find_shenanigans(void);
+uint64_t find_boot_args(void);
 uint64_t find_move_snapshot_to_purgatory(void);
 uint64_t find_chgproccnt(void);
 uint64_t find_kauth_cred_ref(void);
@@ -112,7 +114,7 @@ uint64_t find_proc_rele(void);
 #define find_mpo(name) find_mpo_entry(offsetof(struct mac_policy_ops, mpo_ ##name))
 uint64_t find_mpo_entry(uint64_t offset);
 uint64_t find_hook_policy_syscall(int n);
-uint64_t find_hook_mount_check_snapshot_revert();
+uint64_t find_hook_mount_check_snapshot_revert(void);
 uint64_t find_syscall_set_profile(void);
 uint64_t find_syscall_check_sandbox(void);
 uint64_t find_sandbox_set_container_copyin(void);
